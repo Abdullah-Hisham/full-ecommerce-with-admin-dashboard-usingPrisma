@@ -47,25 +47,33 @@ export async function emailOrderHistory(
     }
   }
 
-  const orders = user.orders.map(async order => {
-    return {
-      ...order,
-      downloadVerificationId: (
-        await db.downloadVerification.create({
-          data: {
+  const orders = await Promise.all(user.orders.map(async (order: any) => {
+    const downloadVerificationId = (await db.downloadVerification.create({
+        data: {
             expiresAt: new Date(Date.now() + 24 * 1000 * 60 * 60),
             productId: order.product.id,
-          },
-        })
-      ).id,
-    }
-  })
+        },
+    })).id;
+
+    return {
+        id: order.id,
+        pricePaidInCents: order.pricePaidInCents,
+        createdAt: order.createdAt,
+        downloadVerificationId,
+        product: {
+            id: order.product.id,
+            name: order.product.name,
+            imagePath: order.product.imagePath,
+            description: order.product.description,
+        },
+    };
+  }));
 
   const data = await resend.emails.send({
     from: `Support <${process.env.SENDER_EMAIL}>`,
     to: user.email,
     subject: "Order History",
-    react: <OrderHistoryEmail orders={await Promise.all(orders)} />,
+    react: <OrderHistoryEmail orders={orders} />,
   })
 
   if (data.error) {
